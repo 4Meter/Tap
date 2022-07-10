@@ -18,17 +18,19 @@ struct ContentView: View {
     @State var isCounterActive:Bool = false
     
     @State var isTapActive = false
+    @State var tapHistory:[Double] = []
     @State var tapCount:Int = 0
     @State var lastTap:Date = Date()
     @State var avgTap = 0.0
     @State var description = ""
+    @State var feeling:Feeling = .good
     
     @State var sucessOpacity = 0.0
     
     var body: some View {
         VStack(spacing:10) {
             RollingCounter(value: $value)
-                .padding(.top,40)
+                .padding(.top,20)
             
             // Button to start the counter
             Button {
@@ -45,14 +47,14 @@ struct ContentView: View {
                         Capsule()
                             .foregroundColor(isCounterActive ? Color.red : Color.blue))
             }
-            .padding(.bottom,40)
+            .padding(.bottom,20)
             
             Divider()
             
             VStack{
                 Text("- Tap -")
                     .font(.title)
-                    .padding(.top,40)
+                    .padding(.top,20)
                 
                 HStack {
                     Button {
@@ -83,12 +85,39 @@ struct ContentView: View {
                 }
                 
                 VStack(alignment:.leading, spacing: 20) {
-                    Text("Count: \(tapCount)")
-                    Text(String(format: "Avg: %.3f per sec", avgTap))
+                    HStack {
+                        VStack(alignment:.leading, spacing: 20){
+                            Text("Count: \(tapCount)")
+                            Text(String(format: "Avg: %.3f s", avgTap))
+                        }
+                        Spacer()
+                        Divider()
+                        VStack(alignment:.center, spacing: 3){
+                            Text("history")
+                                .font(.footnote)
+                            ScrollView(showsIndicators: true) {
+                                VStack {
+                                    ForEach(tapHistory,id:\.self) { i in
+                                        Text(String(format:"%.3f s", i))
+                                            .font(.footnote)
+                                            .frame(width: 100)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(width: 100)
+                    }
                     TextField("Description", text: $description)
                         .padding(10)
                         .background(Color.gray.opacity(0.3))
                         .cornerRadius(10)
+                        .disabled(isTapActive != true)
+                    Picker("Feeling:", selection: $feeling) {
+                        Text("🙂 Good").tag(Feeling.good)
+                        Text("🙁 Bad").tag(Feeling.bad)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .disabled(isTapActive != true)
                 }
                 .padding(.top, 30)
                 .padding(.bottom, 15)
@@ -142,6 +171,7 @@ struct ContentView: View {
         let tap = now.timeIntervalSince1970 - lastTap.timeIntervalSince1970
         print("\(tap)")
         if tap < 3 {
+            tapHistory.append(tap)
             if tapCount == 0 {
                 avgTap = tap
             } else {
@@ -157,6 +187,7 @@ struct ContentView: View {
         avgTap = 0.0
         lastTap = Date()
         isTapActive = false
+        tapHistory.removeAll()
     }
     
     func saveTap() {
@@ -164,17 +195,24 @@ struct ContentView: View {
         let db = Firestore.firestore()
         let app = db.collection("Tap").document("Data")
         let today = app.collection(Tool.TodayDateString())
-        today.document().setData(["count" : tapCount,
-                                  "average" : avgTap,
-                                  "time" : Date().description,
-                                  "description" : description
-                                 ])
+        today.document(Tool.CurrentTimeString()).setData([
+            "count" : tapCount,
+            "average" : avgTap,
+            "time" : Tool.CurrentTimeString(),
+            "description" : description,
+            "feeling" : feeling.rawValue
+        ])
         clearTap()
         sucessOpacity = 1
         withAnimation(.easeIn(duration: 2)) {
             sucessOpacity = 0
         }
     }
+}
+
+enum Feeling:String {
+    case good
+    case bad
 }
 
 struct ContentView_Previews: PreviewProvider {
